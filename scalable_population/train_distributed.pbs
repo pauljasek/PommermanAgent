@@ -1,0 +1,55 @@
+#PBS -A AFSNW27526A21
+#PBS -l select=11:ncpus=28:mpiprocs=1:ompthreads=28:ngpus=2
+#PBS -l walltime=168:00:00
+#PBS -l place=free
+#PBS -q GPU_RD
+#PBS -N dist_pommerman
+#PBS -j oe
+#PBS -k oe
+#PBS -V
+#PBS -r y
+
+JID=`echo $PBS_JOBID | cut -d. -f1`
+
+echo $PBS_JOBID
+echo $PBS_O_WORKDIR
+echo $PBS_JOBNAME
+
+cd /p/home/jasekp/scalable_population
+
+ENTROPY_COSTS=(0.12)
+LEARNING_RATES=(0.001)
+
+ENTROPY_COST=${ENTROPY_COSTS[0]}
+LEARNING_RATE=${LEARNING_RATES[0]}
+NUM_AGENTS=10
+BATCH_SIZE=32
+PROCESSES=10
+
+LOGDIR=agents/pbt_multi_ent_${NUM_AGENTS}_ent_${ENTROPY_COST}_lr_${LEARNING_RATE}
+
+mkdir $LOGDIR
+# cp agents/starter/* $LOGDIR/.
+
+# head -n 1 $PBS_NODEFILE > ${LOGDIR}/nodeslist.txt
+# grep -v -x -F "$(head -n 1 $PBS_NODEFILE)" $PBS_NODEFILE >> ${LOGDIR}/nodeslist.txt
+# grep -v -x -F "$(head -n 1 $PBS_NODEFILE)" $PBS_NODEFILE > ${LOGDIR}/actornodes.txt
+
+cat $PBS_NODEFILE | uniq > ${LOGDIR}/nodeslist.txt
+# cat $PBS_NODEFILE > ${LOGDIR}/nodeslist.txt
+PBS_NODEFILE=${LOGDIR}/nodeslist.txt
+
+while read p; do  ssh ${p%%.*} "pkill python; pkill ssh" & done <${LOGDIR}/nodeslist.txt
+wait
+
+# bash start_learner.bash $NUM_AGENTS $PROCESSES $BATCH_SIZE $ENTROPY_COST $LEARNING_RATE $LOGDIR &
+
+python experiment.py --num_agents=$NUM_AGENTS --task=0 --job_name=learner --processes=$PROCESSES --batch_size=$BATCH_SIZE --entropy_cost=$ENTROPY_COST --learning_rate=$LEARNING_RATE --save_interval=100000000 --burnin=500000000 --threshold=0.15 --logdir=$LOGDIR &
+mpirun python start_distributed.py $NUM_AGENTS $PROCESSES $BATCH_SIZE $ENTROPY_COST $LEARNING_RATE $LOGDIR
+
+# mpirun python experiment.py --num_agents=$NUM_AGENTS --task=0 --batch_size=$BATCH_SIZE --entropy_cost=$ENTROPY_COST --learning_rate=$LEARNING_RATE --logdir=$LOGDIR
+
+wait
+
+while read p; do  ssh ${p%%.*} "pkill python; pkill ssh" & done <${LOGDIR}/nodeslist.txt
+wait

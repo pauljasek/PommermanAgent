@@ -1,0 +1,15 @@
+.idea
+agents
+agents/**
+old_agents
+old_agents/**
+*.pyc
+__pycache__
+__pycache__/**
+events.out.*
+checkpoint
+graph.pbtxt
+model.ckpt*
+*.avi
+*.mp4
+*.png
